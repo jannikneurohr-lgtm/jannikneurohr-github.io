@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anschluss-Trainer</title>
+<style>
+  :root{
+    --bg: #0a0f0d;
+    --panel: #10201a;
+    --panel-2: #142a22;
+    --line: #234437;
+    --trace: #2f5c48;
+    --copper: #d6935c;
+    --led: #4ade80;
+    --led-dim: #2f6b4c;
+    --text: #eaf3ee;
+    --text-dim: #9db8ab;
+    --red: #f87171;
+    --font-ui: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+    --font-head: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(circle at 15% 8%, rgba(74,222,128,0.06), transparent 45%),
+      radial-gradient(circle at 85% 90%, rgba(214,147,92,0.06), transparent 45%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-head);
+    min-height:100vh;
+    padding:20px 14px 60px;
+  }
+  /* subtle PCB trace background */
+  .board{
+    max-width:920px;
+    margin:0 auto;
+    position:relative;
+  }
+  .board::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    opacity:0.5;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(circle at 50% 0%, black, transparent 75%);
+    z-index:-1;
+  }
+
+  header.hero{
+    text-align:left;
+    padding:6px 4px 26px;
+    border-bottom:1px dashed var(--line);
+    margin-bottom:22px;
+  }
+  .eyebrow{
+    font-family:var(--font-ui);
+    font-size:11px;
+    letter-spacing:.14em;
+    color:var(--led);
+    text-transform:uppercase;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .eyebrow .dot{
+    width:7px;height:7px;border-radius:50%;
+    background:var(--led);
+    box-shadow:0 0 8px var(--led);
+    animation:pulse 2.4s infinite;
+  }
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  h1{
+    font-size:clamp(28px,5vw,42px);
+    margin:0 0 8px;
+    font-weight:800;
+    letter-spacing:-0.01em;
+    line-height:1.05;
+  }
+  h1 .accent{color:var(--copper);}
+  .sub{
+    color:var(--text-dim);
+    font-size:15px;
+    max-width:560px;
+    line-height:1.5;
+    margin:0;
+  }
+
+  /* MODE SWITCH — looks like a bank of port selector switches */
+  .switchbank{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:22px 0 26px;
+  }
+  .switch{
+    font-family:var(--font-ui);
+    font-size:12.5px;
+    letter-spacing:.03em;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    padding:10px 16px;
+    border-radius:6px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition:all .15s ease;
+  }
+  .switch:hover{border-color:var(--trace); color:var(--text);}
+  .switch .led{width:6px;height:6px;border-radius:50%;background:var(--led-dim);transition:all .15s;}
+  .switch.active{
+    background:linear-gradient(180deg, var(--panel-2), var(--panel));
+    border-color:var(--led);
+    color:var(--text);
+    box-shadow: inset 0 0 0 1px rgba(74,222,128,0.15), 0 0 14px rgba(74,222,128,0.08);
+  }
+  .switch.active .led{background:var(--led); box-shadow:0 0 6px var(--led);}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:26px;
+    position:relative;
+    overflow:hidden;
+  }
+  .panel::after{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:3px;
+    background:linear-gradient(90deg, var(--led), var(--copper), var(--led));
+    opacity:.6;
+  }
+
+  .stat-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-family:var(--font-ui);
+    font-size:12px;
+    color:var(--text-dim);
+    margin-bottom:18px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .stat-row b{color:var(--text);}
+  .reset-link{
+    background:none;border:none;color:var(--text-dim);
+    font-family:var(--font-ui); font-size:12px;
+    text-decoration:underline; cursor:pointer; padding:0;
+  }
+  .reset-link:hover{color:var(--led);}
+
+  /* ---------- FLASHCARDS ---------- */
+  .flash-stage{
+    display:flex; flex-direction:column; align-items:center; gap:22px;
+  }
+  .flashcard{
+    width:100%; max-width:400px;
+    aspect-ratio: 3/4;
+    perspective: 1400px;
+    cursor:pointer;
+  }
+  .flashcard-inner{
+    position:relative; width:100%; height:100%;
+    transition: transform .55s cubic-bezier(.4,.2,.2,1);
+    transform-style: preserve-3d;
+  }
+  .flashcard.flipped .flashcard-inner{ transform: rotateY(180deg); }
+  .face{
+    position:absolute; inset:0;
+    backface-visibility:hidden;
+    border-radius:16px;
+    display:flex; flex-direction:column;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .face.back{ transform: rotateY(180deg); justify-content:center; padding:26px; text-align:center; }
+  .card-imgwrap{
+    flex:1; display:flex; align-items:center; justify-content:center;
+    padding:22px; background:#0d1a15;
+  }
+  .card-imgwrap img{
+    max-width:100%; max-height:100%; object-fit:contain;
+    border-radius:10px;
+    padding:10px;
+    background:#f4f4f2;
+  }
+  .card-foot{
+    padding:14px 18px 18px;
+    text-align:center;
+    border-top:1px solid var(--line);
+  }
+  .hint{ font-family:var(--font-ui); font-size:11px; color:var(--text-dim); letter-spacing:.05em;}
+  .colorbadge{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:var(--font-ui); font-size:12px;
+    padding:5px 10px; border-radius:20px;
+    background:rgba(255,255,255,0.04);
+    border:1px solid var(--line);
+    margin-top:6px;
+  }
+  .swatch{ width:12px;height:12px;border-radius:3px; border:1px solid rgba(255,255,255,.25); }
+  .back h2{ font-size:22px; margin:0 0 4px; }
+  .back .kat{ font-family:var(--font-ui); font-size:11px; color:var(--led); letter-spacing:.08em; text-transform:uppercase; margin-bottom:12px;}
+  .back p{ color:var(--text-dim); font-size:14.5px; line-height:1.55; margin:12px 0 0;}
+
+  .flash-actions{ display:flex; gap:12px; width:100%; max-width:400px; }
+  .btn{
+    flex:1;
+    font-family:var(--font-ui);
+    font-size:13px;
+    padding:13px 10px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text);
+    cursor:pointer;
+    transition:.15s;
+    letter-spacing:.02em;
+  }
+  .btn:hover{ transform:translateY(-1px); }
+  .btn.again{ border-color:#7a3b3b; color:#f6a8a8; }
+  .btn.again:hover{ background:rgba(248,113,113,0.08); }
+  .btn.know{ border-color:var(--led-dim); color:var(--led); }
+  .btn.know:hover{ background:rgba(74,222,128,0.08); }
+  .btn.primary{ background:var(--led); color:#04150c; border-color:var(--led); font-weight:700; }
+  .btn.primary:hover{ filter:brightness(1.08); }
+  .flip-tip{ font-family:var(--font-ui); font-size:11px; color:var(--text-dim); text-align:center; }
+
+  .empty-state{ text-align:center; padding:40px 16px; }
+  .empty-state .big{ font-size:38px; margin-bottom:10px; }
+  .empty-state h3{ margin:0 0 8px; font-size:20px;}
+  .empty-state p{ color:var(--text-dim); font-size:14px; margin:0 0 20px; }
+
+  /* ---------- MATCHING ---------- */
+  .match-cols{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .match-item{
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    border-radius:10px;
+    padding:10px;
+    cursor:pointer;
+    transition:.15s;
+    display:flex; align-items:center; justify-content:center;
+    min-height:78px;
+    text-align:center;
+  }
+  .match-item img{ width:100%; height:56px; object-fit:contain; background:#f4f4f2; border-radius:6px; padding:6px;}
+  .match-item.name{ font-family:var(--font-ui); font-size:12.5px; padding:14px 8px; line-height:1.35;}
+  .match-item:hover{ border-color:var(--trace); }
+  .match-item.selected{ border-color:var(--copper); box-shadow:0 0 0 1px var(--copper); }
+  .match-item.correct{ border-color:var(--led); background:rgba(74,222,128,0.08); cursor:default; opacity:.55;}
+  .match-item.wrong{ animation: shake .35s; border-color:var(--red); }
+  @keyframes shake{ 0%,100%{transform:translateX(0);} 25%{transform:translateX(-5px);} 75%{transform:translateX(5px);} }
+
+  .match-done{ text-align:center; padding:30px 10px; }
+
+  /* ---------- QUIZ ---------- */
+  .quiz-wrap{ display:flex; flex-direction:column; align-items:center; gap:20px;}
+  .quiz-img{
+    width:100%; max-width:320px; aspect-ratio:4/3;
+    background:#0d1a15; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    padding:18px;
+  }
+  .quiz-img img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; padding:8px; background:#f4f4f2;}
+  .quiz-question{ font-family:var(--font-ui); font-size:12.5px; color:var(--text-dim); letter-spacing:.04em; text-align:center;}
+  .quiz-options{ display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; max-width:460px;}
+  .opt{
+    font-family:var(--font-ui); font-size:12.5px;
+    border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    border-radius:10px; padding:14px 10px; cursor:pointer; transition:.15s; text-align:center;
+  }
+  .opt:hover{ border-color:var(--trace); }
+  .opt.correct{ border-color:var(--led); background:rgba(74,222,128,0.12); color:var(--led); }
+  .opt.wrong{ border-color:var(--red); background:rgba(248,113,113,0.1); color:var(--red); }
+  .opt:disabled{ cursor:default; }
+  .quiz-score{ font-family:var(--font-ui); font-size:12px; color:var(--text-dim);}
+  .quiz-result{ text-align:center; padding:20px 10px;}
+  .quiz-result .score{ font-size:44px; font-weight:800; color:var(--led); margin-bottom:6px;}
+
+  /* ---------- COLOR QUIZ ---------- */
+  .color-question{ text-align:center; }
+  .color-question h2{ font-size:22px; margin:6px 0 4px; }
+  .color-question .kat{ font-family:var(--font-ui); font-size:11px; color:var(--led); letter-spacing:.08em; text-transform:uppercase; }
+  .color-question img{ width:140px; height:110px; object-fit:contain; background:#f4f4f2; border-radius:10px; padding:10px; margin:14px 0 4px; }
+  .color-options{ display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; max-width:460px; }
+  .copt{
+    font-family:var(--font-ui); font-size:12.5px;
+    border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    border-radius:10px; padding:12px 10px; cursor:pointer; transition:.15s;
+    display:flex; align-items:center; gap:10px; text-align:left;
+  }
+  .copt .cswatch{ width:20px;height:20px;border-radius:5px;flex-shrink:0;border:1px solid rgba(255,255,255,.2); }
+  .copt:hover{ border-color:var(--trace); }
+  .copt.correct{ border-color:var(--led); background:rgba(74,222,128,0.12); color:var(--led); }
+  .copt.wrong{ border-color:var(--red); background:rgba(248,113,113,0.1); color:var(--red); }
+  .copt:disabled{ cursor:default; }
+
+  /* ---------- PICK IMAGE ---------- */
+  .pickimg-name{ font-family:var(--font-ui); font-size:11px; color:var(--text-dim); letter-spacing:.05em; text-align:center; }
+  .pickimg-name h2{ font-family:var(--font-head); font-size:22px; color:var(--text); margin:6px 0 0; letter-spacing:0; text-transform:none;}
+  .pickimg-options{ display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; max-width:420px; }
+  .piopt{
+    border:2px solid var(--line); background:var(--panel-2); border-radius:12px;
+    padding:14px; cursor:pointer; transition:.15s;
+  }
+  .piopt img{ width:100%; height:70px; object-fit:contain; background:#f4f4f2; border-radius:8px; padding:8px; }
+  .piopt:hover{ border-color:var(--trace); }
+  .piopt.correct{ border-color:var(--led); box-shadow:0 0 14px -4px var(--led); }
+  .piopt.wrong{ border-color:var(--red); }
+  .piopt:disabled{ cursor:default; }
+
+  /* ---------- TYPING ---------- */
+  .type-imgwrap{ width:100%; max-width:300px; aspect-ratio:4/3; background:#0d1a15; border-radius:14px; display:flex; align-items:center; justify-content:center; padding:18px; }
+  .type-imgwrap img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; padding:8px; background:#f4f4f2; }
+  .type-form{ display:flex; gap:10px; width:100%; max-width:400px; }
+  .type-input{
+    flex:1; font-family:var(--font-ui); font-size:14px;
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:10px; padding:13px 14px; outline:none;
+  }
+  .type-input:focus{ border-color:var(--led); }
+  .type-input.correct{ border-color:var(--led); color:var(--led); }
+  .type-input.wrong{ border-color:var(--red); color:var(--red); }
+  .type-feedback{ font-family:var(--font-ui); font-size:12.5px; text-align:center; min-height:18px; }
+  .type-feedback.ok{ color:var(--led); }
+  .type-feedback.bad{ color:var(--red); }
+
+  /* ---------- USB LOGOS ---------- */
+  .logo-imgwrap{
+    width:100%; max-width:340px; aspect-ratio:2.3/1;
+    background:#f4f4f2; border-radius:14px;
+    display:flex; align-items:center; justify-content:center; padding:22px;
+    border:2px solid var(--line);
+  }
+  .logo-imgwrap img{ max-width:100%; max-height:100%; object-fit:contain; }
+  .logo-options{ display:flex; flex-direction:column; gap:10px; width:100%; max-width:460px; }
+  .logo-options .opt{ text-align:left; }
+  .logo-info{ font-size:13.5px; color:var(--text-dim); text-align:center; line-height:1.5; max-width:440px; }
+
+  /* ---------- LEGEND ---------- */
+  .legend{
+    margin-top:24px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:20px 22px;
+  }
+  .legend-head{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer;
+    font-family:var(--font-ui); font-size:12px; color:var(--text-dim); letter-spacing:.06em; text-transform:uppercase;
+  }
+  .legend-grid{
+    display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+    gap:9px; margin-top:16px;
+  }
+  .legend-grid.hidden{ display:none; }
+  .legend-row{
+    display:flex; align-items:center; gap:10px;
+    font-size:13px; padding:8px 10px;
+    background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+  }
+  .legend-row .swatch{ width:16px;height:16px;flex-shrink:0; }
+  .legend-row .lname{ color:var(--text); }
+  .legend-row .lcolor{ color:var(--text-dim); font-family:var(--font-ui); font-size:11px; margin-left:auto;}
+  .chev{ transition:transform .2s; }
+  .chev.open{ transform:rotate(180deg); }
+
+  footer{
+    text-align:center; margin-top:36px;
+    font-family:var(--font-ui); font-size:11px; color:var(--text-dim);
+  }
+
+  @media (max-width:520px){
+    .match-cols{ gap:10px; }
+    .quiz-options{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="board">
+
+  <header class="hero">
+    <div class="eyebrow"><span class="dot"></span> PC-Hardware · Lernmodus</div>
+    <h1>Anschluss<span class="accent">-Trainer</span></h1>
+    <p class="sub">USB-Varianten, Video-, Netzwerk- und Audio-Anschlüsse per Bild lernen. Der Rahmen jeder Karte trägt die echte Farbcodierung des Anschlusses.</p>
+  </header>
+
+  <div class="switchbank" id="switchbank">
+    <button class="switch active" data-mode="flash"><span class="led"></span>Karteikarten</button>
+    <button class="switch" data-mode="match"><span class="led"></span>Zuordnen</button>
+    <button class="switch" data-mode="quiz"><span class="led"></span>Auswählen</button>
+    <button class="switch" data-mode="color"><span class="led"></span>Farbe raten</button>
+    <button class="switch" data-mode="pickimg"><span class="led"></span>Bild erkennen</button>
+    <button class="switch" data-mode="type"><span class="led"></span>Tippen</button>
+    <button class="switch" data-mode="logo"><span class="led"></span>USB-Logos</button>
+  </div>
+
+  <div class="panel" id="panel"></div>
+
+  <div class="legend">
+    <div class="legend-head" id="legendToggle">
+      <span>Farblegende · alle Anschlüsse</span>
+      <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+    <div class="legend-grid hidden" id="legendGrid"></div>
+  </div>
+
+  <footer>Fortschritt wird lokal für dieses Tool gespeichert · „Kenn ich" nimmt eine Karte dauerhaft aus dem Stapel</footer>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   DATA
+--------------------------------------------------------- */
+const WM = (file, w=500) => `https://commons.wikimedia.org/wiki/Special:FilePath/${file}?width=${w}`;
+
+const CONNECTORS = [
+  { id:'usb2', name:'USB-A (USB 2.0)', kategorie:'USB', farbe:'#1a1a1a', farbname:'Schwarz',
+    info:'480 Mbit/s. Der klassische rechteckige USB-Port, seit den 2000ern an fast jedem PC verbaut.',
+    img: WM('USB-Connector-Standard.jpg') },
+  { id:'usb3', name:'USB-A (USB 3.0 / 3.2 Gen1)', kategorie:'USB', farbe:'#1e5fbf', farbname:'Blau',
+    info:'5 Gbit/s. „SuperSpeed USB" – gleiche Form wie USB 2.0, aber innen meist blau markiert.',
+    img: WM('USB-Connector-Standard.jpg') },
+  { id:'usb31', name:'USB-A (USB 3.1/3.2 Gen2)', kategorie:'USB', farbe:'#0d9488', farbname:'Türkis',
+    info:'10 Gbit/s. Schnellere SuperSpeed+-Variante, oft türkis – diese Farbe ist aber nicht offiziell genormt.',
+    img: WM('USB-Connector-Standard.jpg') },
+  { id:'usbred', name:'USB-A (Immer-an-Ladeport)', kategorie:'USB', farbe:'#dc2626', farbname:'Rot',
+    info:'Liefert auch bei ausgeschaltetem PC Strom zum Laden. Herstellerspezifisch, keine offizielle Norm.',
+    img: WM('USB-Connector-Standard.jpg') },
+  { id:'usbsleep', name:'USB-A (Sleep-and-Charge)', kategorie:'USB', farbe:'#f59e0b', farbname:'Gelb / Orange',
+    info:'Lädt Geräte auch im Ruhezustand des PCs. Vor allem bei Laptops zu finden, herstellerspezifisch.',
+    img: WM('USB-Connector-Standard.jpg') },
+  { id:'usbb', name:'USB-B (Standard-B)', kategorie:'USB', farbe:'#4b5563', farbname:'Grau / Schwarz',
+    info:'Quadratischer Stecker. Typisch an Druckern, Scannern und Audio-Interfaces, nicht am PC-Gehäuse.',
+    img: WM('USB_Type_B_Plug.JPG') },
+  { id:'microusb', name:'Micro-USB', kategorie:'USB', farbe:'#111827', farbname:'Schwarz',
+    info:'Kleiner, flacher Stecker. Älterer Standard für Smartphones und viele Ladegeräte, vor USB-C.',
+    img: WM('Micro_USB.jpg') },
+  { id:'usbc', name:'USB-C', kategorie:'USB', farbe:'#8b8f99', farbname:'Keine feste Farbe (universal)',
+    info:'Ovaler, beidseitig einsteckbarer Stecker. Kann USB 2.0 bis USB4/Thunderbolt sowie Bild & Strom übertragen.',
+    img: WM('USB_Type-C_Plug_02.jpg') },
+  { id:'hdmi', name:'HDMI', kategorie:'Video', farbe:'#111827', farbname:'Schwarz',
+    info:'Digitales Bild- und Tonsignal in einem Kabel. Trapezförmig, meist an Grafikkarte oder Mainboard.',
+    img: WM('HDMI_Connector.jpg') },
+  { id:'dp', name:'DisplayPort', kategorie:'Video', farbe:'#1f2937', farbname:'Schwarz',
+    info:'Ähnlich HDMI, aber mit einer schräg abgeschnittenen Ecke. Für hohe Auflösungen und Bildwiederholraten.',
+    img: WM('DisplayPort_connector-male-front_PNr%C2%B00442.jpg') },
+  { id:'dvi', name:'DVI', kategorie:'Video', farbe:'#e5e7eb', farbname:'Weiß',
+    info:'Älterer Videoanschluss mit vielen kleinen Pins in einem Gitter. Heute nur noch selten verbaut.',
+    img: WM('Computer_DVI_connector.jpg') },
+  { id:'vga', name:'VGA (D-Sub)', kategorie:'Video', farbe:'#2563eb', farbname:'Blau',
+    info:'Analoges Bildsignal, 15-polig, trapezförmig. Veraltet, aber auf manchen Monitoren noch vorhanden.',
+    img: WM('Vga-cable.jpg') },
+  { id:'rj45', name:'Ethernet (RJ45)', kategorie:'Netzwerk', farbe:'#6b7280', farbname:'Grau',
+    info:'Netzwerkkabel-Anschluss. Meist mit kleinen Status-LEDs direkt am Port erkennbar.',
+    img: WM('Ethernet_RJ45_connector_p1160054.jpg') },
+  { id:'audioout', name:'Audio Line-Out / Kopfhörer', kategorie:'Audio', farbe:'#22c55e', farbname:'Grün',
+    info:'3,5-mm-Klinke für Lautsprecher oder Kopfhörer – der Standard-Ausgang am Mainboard.',
+    img: WM('Headphone_jack_and_plug%2C_3.5mm.jpg') },
+  { id:'mic', name:'Mikrofon-Eingang', kategorie:'Audio', farbe:'#ec4899', farbname:'Rosa',
+    info:'3,5-mm-Klinke speziell für Mikrofone.',
+    img: WM('Headphone_jack_and_plug%2C_3.5mm.jpg') },
+  { id:'linein', name:'Audio Line-In', kategorie:'Audio', farbe:'#38bdf8', farbname:'Hellblau',
+    info:'3,5-mm-Klinke für externe Audioquellen wie CD-Player oder externe Mixer.',
+    img: WM('Headphone_jack_and_plug%2C_3.5mm.jpg') },
+  { id:'sata', name:'SATA (Daten/Strom)', kategorie:'Intern', farbe:'#eab308', farbname:'Rot (Daten) / Schwarz (Strom)',
+    info:'Interner Anschluss für Festplatten und SSDs im Gehäuse – von außen nicht sichtbar.',
+    img: WM('SATA_connector_Slimline_CD-ROM.jpg') },
+];
+
+const byId = id => CONNECTORS.find(c => c.id === id);
+
+/* ---------------------------------------------------------
+   STORAGE (persisted "kenn ich schon" set)
+--------------------------------------------------------- */
+let knownIds = new Set();
+let storageReady = false;
+
+async function loadKnown(){
+  try{
+    const res = await window.storage.get('anschluss-trainer:known', false);
+    if(res && res.value){ knownIds = new Set(JSON.parse(res.value)); }
+  }catch(e){ /* key not found yet — fine */ }
+  storageReady = true;
+  renderAll();
+}
+async function saveKnown(){
+  try{ await window.storage.set('anschluss-trainer:known', JSON.stringify([...knownIds]), false); }
+  catch(e){ console.error('Speichern fehlgeschlagen', e); }
+}
+function activePool(){ return CONNECTORS.filter(c => !knownIds.has(c.id)); }
+
+/* ---------------------------------------------------------
+   MODE STATE
+--------------------------------------------------------- */
+let mode = 'flash';
+let flashQueue = [];
+let flashIndex = 0;
+let flashFlipped = false;
+
+let matchLeft = [], matchRight = [], matchSelected = null, matchSolved = new Set();
+
+let quizPool = [], quizIdx = 0, quizScore = 0, quizTotal = 0, quizOptions = [], quizAnswered = false;
+
+const panel = document.getElementById('panel');
+
+function shuffle(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+/* ---------------------------------------------------------
+   RENDER ROUTER
+--------------------------------------------------------- */
+function renderAll(){
+  if(!storageReady) return;
+  if(mode==='flash') renderFlash(true);
+  else if(mode==='match') renderMatch(true);
+  else if(mode==='quiz') renderQuiz(true);
+  else if(mode==='color') renderColorQuiz(true);
+  else if(mode==='pickimg') renderPickImg(true);
+  else if(mode==='type') renderType(true);
+  else if(mode==='logo') renderLogoQuiz(true);
+  renderLegend();
+}
+
+document.getElementById('switchbank').addEventListener('click', e=>{
+  const btn = e.target.closest('.switch');
+  if(!btn) return;
+  document.querySelectorAll('.switch').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  mode = btn.dataset.mode;
+  renderAll();
+});
+
+/* ---------------------------------------------------------
+   FLASHCARDS
+--------------------------------------------------------- */
+function renderFlash(reset){
+  const pool = activePool();
+  if(reset){
+    flashQueue = shuffle(pool);
+    flashIndex = 0;
+    flashFlipped = false;
+  }
+  if(pool.length===0){
+    panel.innerHTML = emptyStateHTML();
+    document.getElementById('restartBtn')?.addEventListener('click', ()=>{ knownIds.clear(); saveKnown(); renderAll(); });
+    return;
+  }
+  if(flashIndex >= flashQueue.length) flashIndex = 0;
+  const c = flashQueue[flashIndex];
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <span>Karte <b>${flashIndex+1}</b> / ${flashQueue.length} &nbsp;·&nbsp; ${knownIds.size} bereits gekonnt</span>
+      <button class="reset-link" id="resetKnown">Alle zurücksetzen</button>
+    </div>
+    <div class="flash-stage">
+      <div class="flashcard ${flashFlipped?'flipped':''}" id="flashcard">
+        <div class="flashcard-inner">
+          <div class="face front" style="border:2px solid ${c.farbe}; box-shadow:0 0 22px -6px ${c.farbe}66;">
+            <div class="card-imgwrap"><img src="${c.img}" alt="${c.name}"></div>
+            <div class="card-foot">
+              <div class="hint">Zum Umdrehen tippen</div>
+              <div class="colorbadge"><span class="swatch" style="background:${c.farbe}"></span>${c.farbname}</div>
+            </div>
+          </div>
+          <div class="face back" style="border:2px solid ${c.farbe};">
+            <div class="kat">${c.kategorie}</div>
+            <h2>${c.name}</h2>
+            <div class="colorbadge"><span class="swatch" style="background:${c.farbe}"></span>${c.farbname}</div>
+            <p>${c.info}</p>
+          </div>
+        </div>
+      </div>
+      <div class="flip-tip">Karte antippen zum Umdrehen</div>
+      <div class="flash-actions">
+        <button class="btn again" id="btnAgain">↺ Nochmal üben</button>
+        <button class="btn know" id="btnKnow">✓ Kenn ich</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('flashcard').addEventListener('click', ()=>{
+    flashFlipped = !flashFlipped;
+    document.getElementById('flashcard').classList.toggle('flipped', flashFlipped);
+  });
+  document.getElementById('resetKnown').addEventListener('click', ()=>{ knownIds.clear(); saveKnown(); renderAll(); });
+  document.getElementById('btnAgain').addEventListener('click', ()=>{
+    flashFlipped = false;
+    flashIndex = (flashIndex+1) % flashQueue.length;
+    renderFlash(false);
+  });
+  document.getElementById('btnKnow').addEventListener('click', ()=>{
+    knownIds.add(c.id);
+    saveKnown();
+    flashQueue = flashQueue.filter(x=>x.id!==c.id);
+    flashFlipped = false;
+    if(flashIndex >= flashQueue.length) flashIndex = 0;
+    renderFlash(false);
+    renderLegend();
+  });
+}
+
+function emptyStateHTML(){
+  return `
+    <div class="empty-state">
+      <div class="big">🔌✅</div>
+      <h3>Alle Karten gekonnt!</h3>
+      <p>Du hast jeden Anschluss als „gekonnt" markiert. Stapel zurücksetzen, um wieder von vorn zu üben.</p>
+      <button class="btn primary" id="restartBtn" style="max-width:220px;">Stapel zurücksetzen</button>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------
+   MATCHING
+--------------------------------------------------------- */
+function renderMatch(reset){
+  const pool = activePool();
+  if(pool.length < 3){
+    panel.innerHTML = `
+      <div class="empty-state">
+        <div class="big">🔌</div>
+        <h3>Zu wenige Karten übrig</h3>
+        <p>Für das Zuordnungs-Spiel werden mindestens 3 offene Karten benötigt. Setze bei Bedarf den Stapel zurück.</p>
+        <button class="btn primary" id="restartBtn" style="max-width:220px;">Stapel zurücksetzen</button>
+      </div>`;
+    document.getElementById('restartBtn')?.addEventListener('click', ()=>{ knownIds.clear(); saveKnown(); renderAll(); });
+    return;
+  }
+  if(reset){
+    const round = shuffle(pool).slice(0, Math.min(6, pool.length));
+    matchLeft = shuffle(round);
+    matchRight = shuffle(round);
+    matchSelected = null;
+    matchSolved = new Set();
+    window._matchRound = round;
+  }
+  const round = window._matchRound;
+
+  if(matchSolved.size === round.length){
+    panel.innerHTML = `
+      <div class="match-done">
+        <div style="font-size:38px;margin-bottom:10px;">🎉</div>
+        <h3 style="margin:0 0 8px;">Alle Paare gefunden!</h3>
+        <p style="color:var(--text-dim);font-size:14px;margin:0 0 20px;">Bild und Anschlussname passen jetzt sicher zusammen.</p>
+        <button class="btn primary" id="nextRound" style="max-width:220px;">Neue Runde</button>
+      </div>`;
+    document.getElementById('nextRound').addEventListener('click', ()=>renderMatch(true));
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="stat-row"><span>Gefunden: <b>${matchSolved.size}</b> / ${round.length}</span></div>
+    <div class="match-cols">
+      <div class="match-col-left"></div>
+      <div class="match-col-right"></div>
+    </div>
+  `;
+  const left = panel.querySelector('.match-col-left');
+  const right = panel.querySelector('.match-col-right');
+
+  matchLeft.forEach(c=>{
+    const solved = matchSolved.has(c.id);
+    const div = document.createElement('div');
+    div.className = 'match-item' + (solved?' correct':'');
+    div.dataset.id = c.id; div.dataset.side='img';
+    div.style.marginBottom='10px';
+    div.innerHTML = `<img src="${c.img}" alt="${c.name}" style="border:2px solid ${c.farbe};">`;
+    if(!solved) div.addEventListener('click', ()=>handleMatchClick(c.id,'img'));
+    left.appendChild(div);
+  });
+  matchRight.forEach(c=>{
+    const solved = matchSolved.has(c.id);
+    const div = document.createElement('div');
+    div.className = 'match-item name' + (solved?' correct':'');
+    div.dataset.id = c.id; div.dataset.side='name';
+    div.style.marginBottom='10px';
+    div.textContent = c.name;
+    if(!solved) div.addEventListener('click', ()=>handleMatchClick(c.id,'name'));
+    right.appendChild(div);
+  });
+
+  if(matchSelected){
+    const el = panel.querySelector(`.match-item[data-side="${matchSelected.side}"][data-id="${matchSelected.id}"]`);
+    el?.classList.add('selected');
+  }
+}
+
+function handleMatchClick(id, side){
+  if(!matchSelected){
+    matchSelected = {id, side};
+    renderMatch(false);
+    return;
+  }
+  if(matchSelected.side === side){
+    matchSelected = {id, side};
+    renderMatch(false);
+    return;
+  }
+  if(matchSelected.id === id){
+    matchSolved.add(id);
+    matchSelected = null;
+    renderMatch(false);
+  } else {
+    const wrongEl = panel.querySelector(`.match-item[data-side="${side}"][data-id="${id}"]`);
+    const selEl = panel.querySelector(`.match-item[data-side="${matchSelected.side}"][data-id="${matchSelected.id}"]`);
+    [wrongEl, selEl].forEach(el=>el?.classList.add('wrong'));
+    setTimeout(()=>{ matchSelected = null; renderMatch(false); }, 420);
+  }
+}
+
+/* ---------------------------------------------------------
+   QUIZ
+--------------------------------------------------------- */
+function renderQuiz(reset){
+  const pool = activePool();
+  if(pool.length < 4){
+    panel.innerHTML = `
+      <div class="empty-state">
+        <div class="big">🔌</div>
+        <h3>Zu wenige Karten übrig</h3>
+        <p>Für das Quiz werden mindestens 4 offene Karten benötigt (für die Auswahlmöglichkeiten). Setze bei Bedarf den Stapel zurück.</p>
+        <button class="btn primary" id="restartBtn" style="max-width:220px;">Stapel zurücksetzen</button>
+      </div>`;
+    document.getElementById('restartBtn')?.addEventListener('click', ()=>{ knownIds.clear(); saveKnown(); renderAll(); });
+    return;
+  }
+  if(reset){
+    quizPool = shuffle(pool).slice(0, Math.min(10, pool.length));
+    quizIdx = 0; quizScore = 0; quizTotal = 0;
+  }
+
+  if(quizIdx >= quizPool.length){
+    panel.innerHTML = `
+      <div class="quiz-result">
+        <div class="score">${quizScore}/${quizTotal}</div>
+        <p style="color:var(--text-dim);font-size:14px;margin:0 0 22px;">richtig erkannt</p>
+        <button class="btn primary" id="restartQuiz" style="max-width:220px;">Neue Runde</button>
+      </div>`;
+    document.getElementById('restartQuiz').addEventListener('click', ()=>renderQuiz(true));
+    return;
+  }
+
+  const c = quizPool[quizIdx];
+  quizAnswered = false;
+  const distractors = shuffle(CONNECTORS.filter(x=>x.id!==c.id)).slice(0,3);
+  quizOptions = shuffle([c, ...distractors]);
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <span>Frage <b>${quizIdx+1}</b> / ${quizPool.length}</span>
+      <span class="quiz-score">Punkte: ${quizScore}/${quizTotal}</span>
+    </div>
+    <div class="quiz-wrap">
+      <div class="quiz-img" style="border:2px solid ${c.farbe}; box-shadow:0 0 22px -6px ${c.farbe}66;">
+        <img src="${c.img}" alt="Anschluss">
+      </div>
+      <div class="quiz-question">Welcher Anschluss ist das?</div>
+      <div class="quiz-options" id="quizOptions"></div>
+    </div>
+  `;
+  const optWrap = document.getElementById('quizOptions');
+  quizOptions.forEach(opt=>{
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.textContent = opt.name;
+    b.addEventListener('click', ()=>handleQuizAnswer(opt.id===c.id, b, c.id));
+    optWrap.appendChild(b);
+  });
+}
+
+function handleQuizAnswer(isCorrect, btnEl, correctId){
+  if(quizAnswered) return;
+  quizAnswered = true;
+  quizTotal++;
+  if(isCorrect) quizScore++;
+  document.querySelectorAll('#quizOptions .opt').forEach(b=>{
+    b.disabled = true;
+    if(b.textContent === byId(correctId).name) b.classList.add('correct');
+  });
+  if(!isCorrect) btnEl.classList.add('wrong');
+  setTimeout(()=>{ quizIdx++; renderQuiz(false); }, 850);
+}
+
+/* ---------------------------------------------------------
+   COLOR QUIZ — Bild/Name zeigen, richtige Farbe erraten
+   Nur bei Anschlüssen, wo Farbe wirklich etwas bedeutet:
+   USB-Varianten (Generation/Funktion per Farbe) sowie die
+   3,5-mm-Klinken (gleiche Bauform, Farbe = Funktion).
+--------------------------------------------------------- */
+const COLOR_RELEVANT_IDS = new Set(['audioout','mic','linein']);
+function isColorRelevant(c){ return c.kategorie==='USB' || COLOR_RELEVANT_IDS.has(c.id); }
+
+let colorPool=[], colorIdx=0, colorScore=0, colorTotal=0, colorAnswered=false;
+
+function renderColorQuiz(reset){
+  const pool = activePool().filter(isColorRelevant);
+  if(pool.length < 4){
+    panel.innerHTML = tooFewHTML('Für „Farbe raten" (USB + Klinkenanschlüsse) werden mindestens 4 offene Karten benötigt.');
+    bindRestart(); return;
+  }
+  if(reset){
+    colorPool = shuffle(pool).slice(0, Math.min(10, pool.length));
+    colorIdx = 0; colorScore = 0; colorTotal = 0;
+  }
+  if(colorIdx >= colorPool.length){
+    panel.innerHTML = resultHTML(colorScore, colorTotal, 'restartColor');
+    document.getElementById('restartColor').addEventListener('click', ()=>renderColorQuiz(true));
+    return;
+  }
+  const c = colorPool[colorIdx];
+  colorAnswered = false;
+
+  // Distraktoren nur aus dem gleichen farb-relevanten Pool, mit unterschiedlichem Farbnamen
+  const distractors = shuffle(CONNECTORS.filter(isColorRelevant).filter(x=>x.farbname!==c.farbname && x.id!==c.id))
+    .filter((x,i,arr)=>arr.findIndex(y=>y.farbname===x.farbname)===i)
+    .slice(0,3);
+  const options = shuffle([c, ...distractors]);
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <span>Frage <b>${colorIdx+1}</b> / ${colorPool.length}</span>
+      <span class="quiz-score">Punkte: ${colorScore}/${colorTotal}</span>
+    </div>
+    <div class="flash-stage">
+      <div class="color-question">
+        <div class="kat">${c.kategorie}</div>
+        <h2>${c.name}</h2>
+        <img src="${c.img}" alt="${c.name}">
+      </div>
+      <div class="quiz-question">Welche Farbcodierung gehört zu diesem Anschluss?</div>
+      ${COLOR_RELEVANT_IDS.has(c.id) ? '<div class="hint" style="text-align:center;">Gleiche 3,5-mm-Klinke wie die anderen Audio-Anschlüsse — nur die Farbe zeigt die Funktion.</div>' : ''}
+      <div class="color-options" id="colorOptions"></div>
+    </div>
+  `;
+  const wrap = document.getElementById('colorOptions');
+  options.forEach(opt=>{
+    const b = document.createElement('button');
+    b.className='copt';
+    b.innerHTML = `<span class="cswatch" style="background:${opt.farbe}"></span>${opt.farbname}`;
+    b.addEventListener('click', ()=>handleColorAnswer(opt.id===c.id, b, c.farbname));
+    wrap.appendChild(b);
+  });
+}
+
+function handleColorAnswer(isCorrect, btnEl, correctFarbname){
+  if(colorAnswered) return;
+  colorAnswered = true;
+  colorTotal++;
+  if(isCorrect) colorScore++;
+  document.querySelectorAll('#colorOptions .copt').forEach(b=>{
+    b.disabled = true;
+    if(b.textContent.trim()===correctFarbname) b.classList.add('correct');
+  });
+  if(!isCorrect) btnEl.classList.add('wrong');
+  setTimeout(()=>{ colorIdx++; renderColorQuiz(false); }, 850);
+}
+
+/* ---------------------------------------------------------
+   BILD ERKENNEN — Name zeigen, richtiges Bild erraten
+--------------------------------------------------------- */
+let picPool=[], picIdx=0, picScore=0, picTotal=0, picAnswered=false;
+
+function renderPickImg(reset){
+  const pool = activePool();
+  if(pool.length < 4){
+    panel.innerHTML = tooFewHTML('Für „Bild erkennen" werden mindestens 4 offene Karten benötigt.');
+    bindRestart(); return;
+  }
+  if(reset){
+    picPool = shuffle(pool).slice(0, Math.min(10, pool.length));
+    picIdx = 0; picScore = 0; picTotal = 0;
+  }
+  if(picIdx >= picPool.length){
+    panel.innerHTML = resultHTML(picScore, picTotal, 'restartPick');
+    document.getElementById('restartPick').addEventListener('click', ()=>renderPickImg(true));
+    return;
+  }
+  const c = picPool[picIdx];
+  picAnswered = false;
+  const distractors = shuffle(CONNECTORS.filter(x=>x.id!==c.id)).slice(0,3);
+  const options = shuffle([c, ...distractors]);
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <span>Frage <b>${picIdx+1}</b> / ${picPool.length}</span>
+      <span class="quiz-score">Punkte: ${picScore}/${picTotal}</span>
+    </div>
+    <div class="flash-stage">
+      <div class="pickimg-name">
+        Welches Bild zeigt diesen Anschluss?
+        <h2>${c.name}</h2>
+      </div>
+      <div class="pickimg-options" id="picOptions"></div>
+    </div>
+  `;
+  const wrap = document.getElementById('picOptions');
+  options.forEach(opt=>{
+    const b = document.createElement('button');
+    b.className='piopt';
+    b.style.borderColor = 'var(--line)';
+    b.innerHTML = `<img src="${opt.img}" alt="Option">`;
+    b.addEventListener('click', ()=>handlePickAnswer(opt.id===c.id, b, c.id, options));
+    wrap.appendChild(b);
+  });
+}
+
+function handlePickAnswer(isCorrect, btnEl, correctId, options){
+  if(picAnswered) return;
+  picAnswered = true;
+  picTotal++;
+  if(isCorrect) picScore++;
+  const buttons = document.querySelectorAll('#picOptions .piopt');
+  buttons.forEach((b,i)=>{
+    b.disabled = true;
+    if(options[i].id===correctId) b.classList.add('correct');
+  });
+  if(!isCorrect) btnEl.classList.add('wrong');
+  setTimeout(()=>{ picIdx++; renderPickImg(false); }, 850);
+}
+
+/* ---------------------------------------------------------
+   TIPPEN — Bild zeigen, Namen eintippen (freier Abruf)
+--------------------------------------------------------- */
+let typePool=[], typeIdx=0, typeScore=0, typeTotal=0, typeChecked=false;
+
+function normalize(str){
+  return str.toLowerCase()
+    .replace(/ü/g,'ue').replace(/ö/g,'oe').replace(/ä/g,'ae').replace(/ß/g,'ss')
+    .replace(/[^a-z0-9]/g,'');
+}
+// Akzeptiert Kernbegriff, z.B. "usbc" für "USB-C" oder "hdmi" für "HDMI"
+function isAnswerCorrect(input, c){
+  const n = normalize(input);
+  if(n.length < 2) return false;
+  const target = normalize(c.name);
+  if(target.includes(n) && n.length >= Math.min(4, target.length)) return true;
+  if(n===target) return true;
+  // Kürzel-Fallback: erstes "Wort" (bis Klammer/Leerzeichen) muss stimmen
+  const core = normalize(c.name.split('(')[0]);
+  return n === core;
+}
+
+function renderType(reset){
+  const pool = activePool();
+  if(pool.length < 1){
+    panel.innerHTML = emptyStateHTML();
+    bindRestart(); return;
+  }
+  if(reset){
+    typePool = shuffle(pool).slice(0, Math.min(10, pool.length));
+    typeIdx = 0; typeScore = 0; typeTotal = 0;
+  }
+  if(typeIdx >= typePool.length){
+    panel.innerHTML = resultHTML(typeScore, typeTotal, 'restartType');
+    document.getElementById('restartType').addEventListener('click', ()=>renderType(true));
+    return;
+  }
+  const c = typePool[typeIdx];
+  typeChecked = false;
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <span>Karte <b>${typeIdx+1}</b> / ${typePool.length}</span>
+      <span class="quiz-score">Punkte: ${typeScore}/${typeTotal}</span>
+    </div>
+    <div class="flash-stage">
+      <div class="type-imgwrap" style="border:2px solid ${c.farbe}; box-shadow:0 0 22px -6px ${c.farbe}66;">
+        <img src="${c.img}" alt="Anschluss">
+      </div>
+      <div class="quiz-question">Wie heißt dieser Anschluss?</div>
+      <form class="type-form" id="typeForm">
+        <input class="type-input" id="typeInput" type="text" autocomplete="off" placeholder="Antwort eintippen…" autofocus>
+        <button class="btn primary" type="submit" style="flex:0 0 auto; padding:13px 20px;">Prüfen</button>
+      </form>
+      <div class="type-feedback" id="typeFeedback"></div>
+    </div>
+  `;
+  const form = document.getElementById('typeForm');
+  const input = document.getElementById('typeInput');
+  const feedback = document.getElementById('typeFeedback');
+
+  form.addEventListener('submit', e=>{
+    e.preventDefault();
+    if(typeChecked){
+      typeIdx++; renderType(false); return;
+    }
+    typeChecked = true;
+    typeTotal++;
+    const ok = isAnswerCorrect(input.value, c);
+    if(ok){
+      typeScore++;
+      input.classList.add('correct');
+      feedback.textContent = `Richtig! — ${c.name}`;
+      feedback.className = 'type-feedback ok';
+    } else {
+      input.classList.add('wrong');
+      feedback.textContent = `Nicht ganz — richtig ist: ${c.name}`;
+      feedback.className = 'type-feedback bad';
+    }
+    form.querySelector('button').textContent = 'Weiter →';
+    input.disabled = true;
+    setTimeout(()=>{ typeIdx++; renderType(false); }, 1400);
+  });
+}
+
+/* ---------------------------------------------------------
+   USB-LOGOS — die kleinen Symbole neben den Ports
+--------------------------------------------------------- */
+const LOGOS = [
+  { id:'std', name:'USB (Standard, bis USB 2.0)',
+    info:'Der einfache Trident ohne Zusatz. Steht für einen Standard- oder Hi-Speed-USB-Port bis 480 Mbit/s.',
+    img: WM('USB icon.svg', 400) },
+  { id:'ss', name:'SuperSpeed USB (USB 3.0 / 3.2 Gen1 · 5 Gbit/s)',
+    info:'„SS"-Trident ohne Zahl. Kennzeichnet den ursprünglichen USB-3.0-Port mit 5 Gbit/s.',
+    img: WM('USB SuperSpeed Trident Logo.svg', 400) },
+  { id:'ss10', name:'SuperSpeed USB 10 Gbit/s (USB 3.1/3.2 Gen2)',
+    info:'„SS"-Trident mit der Zahl 10. Doppelte Geschwindigkeit gegenüber dem einfachen SuperSpeed-Logo.',
+    img: WM('USB SuperSpeed 10 Gbps Trident Logo.svg', 400) },
+  { id:'ss20', name:'SuperSpeed USB 20 Gbit/s (USB 3.2 Gen2x2)',
+    info:'„SS"-Trident mit der Zahl 20. Nur mit vollwertigen USB-C-Kabeln und -Ports nutzbar.',
+    img: WM('USB SuperSpeed 20 Gbps Trident Logo.svg', 400) },
+  { id:'usb4', name:'USB4 20Gbps',
+    info:'Eigenes USB4-Logo mit Geschwindigkeitsangabe. Neuester Standard, ausschließlich über USB-C.',
+    img: WM('Certified USB4 20Gbps Logo.svg', 400) },
+];
+
+let logoPool=[], logoIdx=0, logoScore=0, logoTotal=0, logoAnswered=false;
+
+function renderLogoQuiz(reset){
+  if(reset){
+    logoPool = shuffle(LOGOS);
+    logoIdx = 0; logoScore = 0; logoTotal = 0;
+  }
+  if(logoIdx >= logoPool.length){
+    panel.innerHTML = resultHTML(logoScore, logoTotal, 'restartLogo');
+    document.getElementById('restartLogo').addEventListener('click', ()=>renderLogoQuiz(true));
+    return;
+  }
+  const c = logoPool[logoIdx];
+  logoAnswered = false;
+  const distractors = shuffle(LOGOS.filter(x=>x.id!==c.id)).slice(0,3);
+  const options = shuffle([c, ...distractors]);
+
+  panel.innerHTML = `
+    <div class="stat-row">
+      <span>Logo <b>${logoIdx+1}</b> / ${logoPool.length}</span>
+      <span class="quiz-score">Punkte: ${logoScore}/${logoTotal}</span>
+    </div>
+    <div class="flash-stage">
+      <div class="logo-imgwrap"><img src="${c.img}" alt="USB-Logo"></div>
+      <div class="quiz-question">Welche USB-Geschwindigkeit steht hinter diesem Logo?</div>
+      <div class="logo-options" id="logoOptions"></div>
+      <div class="logo-info" id="logoInfo"></div>
+    </div>
+  `;
+  const wrap = document.getElementById('logoOptions');
+  options.forEach(opt=>{
+    const b = document.createElement('button');
+    b.className='opt';
+    b.textContent = opt.name;
+    b.addEventListener('click', ()=>handleLogoAnswer(opt.id===c.id, b, c));
+    wrap.appendChild(b);
+  });
+}
+
+function handleLogoAnswer(isCorrect, btnEl, correct){
+  if(logoAnswered) return;
+  logoAnswered = true;
+  logoTotal++;
+  if(isCorrect) logoScore++;
+  document.querySelectorAll('#logoOptions .opt').forEach(b=>{
+    b.disabled = true;
+    if(b.textContent===correct.name) b.classList.add('correct');
+  });
+  if(!isCorrect) btnEl.classList.add('wrong');
+  document.getElementById('logoInfo').textContent = correct.info;
+  setTimeout(()=>{ logoIdx++; renderLogoQuiz(false); }, 1300);
+}
+
+/* ---------------------------------------------------------
+   SHARED HELPERS
+--------------------------------------------------------- */
+function tooFewHTML(msg){
+  return `
+    <div class="empty-state">
+      <div class="big">🔌</div>
+      <h3>Zu wenige Karten übrig</h3>
+      <p>${msg} Setze bei Bedarf den Stapel zurück.</p>
+      <button class="btn primary" id="restartBtn" style="max-width:220px;">Stapel zurücksetzen</button>
+    </div>`;
+}
+function bindRestart(){
+  document.getElementById('restartBtn')?.addEventListener('click', ()=>{ knownIds.clear(); saveKnown(); renderAll(); });
+}
+function resultHTML(score, total, btnId){
+  return `
+    <div class="quiz-result">
+      <div class="score">${score}/${total}</div>
+      <p style="color:var(--text-dim);font-size:14px;margin:0 0 22px;">richtig erkannt</p>
+      <button class="btn primary" id="${btnId}" style="max-width:220px;">Neue Runde</button>
+    </div>`;
+}
+
+/* ---------------------------------------------------------
+   LEGEND
+--------------------------------------------------------- */
+function renderLegend(){
+  const grid = document.getElementById('legendGrid');
+  grid.innerHTML = CONNECTORS.map(c=>`
+    <div class="legend-row" style="opacity:${knownIds.has(c.id)?0.4:1}">
+      <span class="swatch" style="background:${c.farbe}"></span>
+      <span class="lname">${c.name}</span>
+      <span class="lcolor">${c.farbname.split(' ')[0]}</span>
+    </div>
+  `).join('');
+}
+document.getElementById('legendToggle').addEventListener('click', ()=>{
+  const grid = document.getElementById('legendGrid');
+  const chev = document.querySelector('.chev');
+  grid.classList.toggle('hidden');
+  chev.classList.toggle('open');
+});
+
+/* ---------------------------------------------------------
+   INIT
+--------------------------------------------------------- */
+loadKnown();
+</script>
+</body>
+</html>
